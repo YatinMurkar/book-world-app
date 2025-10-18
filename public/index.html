@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book World</title>
+    <!-- QR Code Library -->
+    <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #6c757d;
+            --background-color: #f8f9fa;
+            --surface-color: #ffffff;
+            --text-color: #333;
+            --border-color: #dee2e6;
+            --highlight-color: #e9f5ff;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* Controls & Filters */
+        .selection-controls, .filters {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            padding: 20px;
+            background-color: var(--surface-color);
+            border-radius: 8px;
+            align-items: flex-end;
+        }
+
+        .dropdown-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: var(--secondary-color);
+        }
+
+        select {
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            min-width: 200px;
+            font-size: 1rem;
+            background-color: #fff;
+        }
+
+        /* Book List */
+        .book-section {
+            background-color: var(--surface-color);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            margin-top: 20px;
+        }
+
+        .book-list {
+            display: grid;
+            gap: 15px;
+        }
+
+        .book-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            transition: background-color 0.2s, border-left 0.2s;
+            cursor: pointer;
+        }
+
+        .book-item.selected {
+            background-color: var(--highlight-color);
+            border-left: 5px solid var(--primary-color);
+        }
+
+        .book-item input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+        }
+
+        .book-details {
+            flex-grow: 1;
+        }
+
+        .book-details h3 {
+            margin: 0 0 5px 0;
+            font-size: 1.1rem;
+        }
+
+        .book-details p {
+            margin: 0;
+            color: var(--secondary-color);
+            font-size: 0.9rem;
+        }
+
+        .book-price {
+            font-weight: bold;
+            font-size: 1.2rem;
+            color: var(--primary-color);
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 12px 25px;
+            font-size: 1rem;
+            font-weight: bold;
+            color: white;
+            background-color: var(--primary-color);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+        .btn:disabled {
+            background-color: var(--secondary-color);
+            cursor: not-allowed;
+        }
+        .btn:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+        .btn:active:not(:disabled) {
+            transform: translateY(1px);
+        }
+        .btn-secondary {
+            background-color: var(--secondary-color);
+        }
+        .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+
+        .action-buttons {
+            margin-top: 20px;
+            text-align: right;
+        }
+
+        /* Cart Panel / Modal */
+        .cart-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            display: none;
+            z-index: 999;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
+        }
+        .cart-overlay.visible {
+            display: block;
+            opacity: 1;
+        }
+
+        .cart-panel {
+            position: fixed;
+            top: 0;
+            right: -100%; /* Start off-screen */
+            width: 100%;
+            max-width: 500px;
+            height: 100%;
+            background-color: white;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            transition: right 0.3s ease-in-out;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .cart-panel.open {
+            right: 0;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 2rem;
+            cursor: pointer;
+            color: var(--secondary-color);
+        }
+
+        .cart-content {
+            padding: 20px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .cart-content h2 {
+            margin-top: 20px;
+            text-align: center;
+            color: var(--primary-color);
+        }
+
+        .cart-item, .order-summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .cart-total, .order-total {
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+            font-size: 1.2rem;
+            padding-top: 15px;
+            color: var(--primary-color);
+        }
+        .cart-buttons {
+            padding: 20px;
+            text-align: center;
+            border-top: 1px solid var(--border-color);
+            background-color: var(--background-color);
+        }
+
+        /* Checkout Form & Details */
+        .checkout-form .form-group {
+            margin-bottom: 15px;
+        }
+        .checkout-form label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .checkout-form input, .checkout-form textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-sizing: border-box;
+        }
+        .checkout-form .form-row {
+            display: flex;
+            gap: 15px;
+        }
+        .checkout-form .form-row > div {
+            flex: 1;
+        }
+
+
+        .order-preview h3 {
+            border-bottom: 2px solid var(--primary-color);
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .order-preview-address p {
+            margin: 0;
+            line-height: 1.5;
+        }
+
+
+        /* Payment Section */
+        #qr-code-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            margin: 20px auto;
+            border: 1px dashed var(--border-color);
+            width: fit-content;
+            border-radius: 8px;
+        }
+
+        .success-message {
+            text-align: center;
+            padding: 30px;
+        }
+        .success-message .icon {
+            font-size: 4rem;
+            color: var(--success-color);
+        }
+        #order-id {
+            background-color: var(--highlight-color);
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: bold;
+            display: inline-block;
+            margin-top: 15px;
+            border: 1px solid var(--primary-color);
+        }
+
+        /* Loader */
+        .loader {
+            border: 8px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 8px solid var(--primary-color);
+            width: 60px;
+            height: 60px;
+            animation: spin 1s linear infinite;
+            margin: 40px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .cart-panel {
+                max-width: 100%;
+                border-radius: 0;
+            }
+            .selection-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .checkout-form .form-row {
+                flex-direction: column;
+                gap: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Book World</h1>
+    </header>
+
+    <main class="container">
+        <!-- SELECTION CONTROLS -->
+        <section class="selection-controls">
+            <div class="dropdown-group">
+                <label for="school-select">Select School:</label>
+                <select id="school-select">
+                    <option value="">-- Choose a School --</option>
+                    <option value="Mahatma School">Mahatma School</option>
+                    <option value="Global Knowledge Academy">Global Knowledge Academy</option>
+                    <option value="Heritage Public School">Heritage Public School</option>
+                    <option value="Northwood International School">Northwood International School</option>
+                </select>
+            </div>
+            <div class="dropdown-group">
+                <label for="standard-select">Select Standard:</label>
+                <select id="standard-select">
+                    <option value="">-- Choose a Standard --</option>
+                    <option value="Grade X">Grade X</option>
+                    <!-- Add other standards as needed -->
+                </select>
+            </div>
+            <button id="submit-selection-btn" class="btn" disabled>Submit Selection</button>
+        </section>
+
+        <div id="loader" class="loader" style="display: none;"></div>
+
+        <!-- FILTERS & BOOK LIST -->
+        <section class="book-section" id="book-section" style="display: none;">
+            <h2 id="book-list-title">Available Books</h2>
+            <div class="filters">
+                <select id="subject-filter">
+                    <option value="all">All Subjects</option>
+                </select>
+            </div>
+            <div id="book-list" class="book-list">
+                <!-- Book items will be dynamically inserted here -->
+            </div>
+             <div class="action-buttons">
+                <button id="add-to-bag-btn" class="btn">Add to School Bag</button>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- SIDE PANEL / MODAL FOR CART & CHECKOUT -->
+    <div id="cart-overlay" class="cart-overlay"></div>
+    <div id="cart-panel" class="cart-panel">
+        <button id="close-cart-btn" class="close-btn">&times;</button>
+        <div id="cart-content" class="cart-content">
+            <!-- Dynamic Content (Cart -> Form -> Preview -> Payment -> Success) -->
+        </div>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- STATE MANAGEMENT ---
+        let allBooks = [];
+        let cart = [];
+        const WEBHOOK_URL = "https://grumblingly-unramified-librada.ngrok-free.dev/webhook/9141a7b8-efda-45a8-ae42-ee2feb0c4605";
+
+        // --- DOM ELEMENTS ---
+        const schoolSelect = document.getElementById('school-select');
+        const standardSelect = document.getElementById('standard-select');
+        const submitSelectionBtn = document.getElementById('submit-selection-btn');
+        const bookSection = document.getElementById('book-section');
+        const bookList = document.getElementById('book-list');
+        const bookListTitle = document.getElementById('book-list-title');
+        const subjectFilter = document.getElementById('subject-filter');
+        const loader = document.getElementById('loader');
+        
+        // Cart Elements
+        const cartPanel = document.getElementById('cart-panel');
+        const cartOverlay = document.getElementById('cart-overlay');
+        const cartContent = document.getElementById('cart-content');
+        const closeCartBtn = document.getElementById('close-cart-btn');
+        const addToBagBtn = document.getElementById('add-to-bag-btn');
+
+        // --- EVENT LISTENERS ---
+        schoolSelect.addEventListener('change', toggleSubmitButton);
+        standardSelect.addEventListener('change', toggleSubmitButton);
+        submitSelectionBtn.addEventListener('click', fetchBooks);
+
+        subjectFilter.addEventListener('change', filterAndRenderBooks);
+        addToBagBtn.addEventListener('click', handleAddToBag);
+        closeCartBtn.addEventListener('click', closeCart);
+        cartOverlay.addEventListener('click', closeCart);
+
+        // --- CORE FUNCTIONS ---
+        function toggleSubmitButton() {
+            if (schoolSelect.value || standardSelect.value) {
+                submitSelectionBtn.disabled = false;
+            } else {
+                submitSelectionBtn.disabled = true;
+            }
+        }
+
+        async function fetchBooks() {
+            const school = schoolSelect.value;
+            const standard = standardSelect.value;
+
+            loader.style.display = 'block';
+            bookList.innerHTML = '';
+            bookSection.style.display = 'none';
+            submitSelectionBtn.disabled = true;
+
+            try {
+                const response = await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ school, standard })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Network response was not ok. Status: ${response.status}`);
+                }
+                
+                const responseData = await response.json();
+
+                if (Array.isArray(responseData)) {
+                    allBooks = responseData; 
+                    bookListTitle.textContent = "Available Books";
+                } else {
+                   throw new Error("Webhook response is not a valid JSON array.");
+                }
+
+                if (allBooks && allBooks.length > 0) {
+                    populateFilters();
+                    filterAndRenderBooks();
+                    bookSection.style.display = 'block';
+                } else {
+                    bookSection.style.display = 'block';
+                    bookList.innerHTML = '<p>No books found for this selection. The webhook returned an empty list.</p>';
+                }
+            } catch (error) {
+                console.error('🔴 FETCH FAILED:', error);
+                bookSection.style.display = 'block';
+                bookList.innerHTML = `<p style="color: var(--danger-color);"><strong>Error: Could not load books.</strong><br>This is likely a server security (CORS) issue or a network problem. Please ensure the webhook is running and allows requests from this page. Check the browser console (F12) for more details.</p>`;
+
+            } finally {
+                loader.style.display = 'none';
+                toggleSubmitButton();
+            }
+        }
+        
+        function populateFilters() {
+            const subjects = ['all', ...new Set(allBooks.map(book => book.Subject))];
+            subjectFilter.innerHTML = subjects.map(subject => 
+                `<option value="${subject}">${subject ? subject.charAt(0).toUpperCase() + subject.slice(1) : ''}</option>`
+            ).join('');
+        }
+
+        function filterAndRenderBooks() {
+            const selectedSubject = subjectFilter.value;
+            const filteredBooks = selectedSubject === 'all'
+                ? allBooks
+                : allBooks.filter(book => book.Subject === selectedSubject);
+            renderBooks(filteredBooks);
+        }
+
+        function renderBooks(books) {
+            // Clear only book items, not the error/info message
+            const existingItems = bookList.querySelectorAll('.book-item, p');
+            existingItems.forEach(item => item.remove());
+
+            if (books.length === 0) {
+                const noMatchMsg = document.createElement('p');
+                noMatchMsg.textContent = 'No books match the current filter.';
+                bookList.appendChild(noMatchMsg);
+                return;
+            }
+
+            const currentSelections = new Set(
+                Array.from(bookList.querySelectorAll('.book-checkbox:checked')).map(cb => cb.closest('.book-item').dataset.title)
+            );
+            books.forEach(book => {
+                const isSelected = currentSelections.has(book.Title);
+                const item = document.createElement('div');
+                item.className = `book-item ${isSelected ? 'selected' : ''}`;
+                item.dataset.title = book.Title;
+                item.innerHTML = `
+                    <input type="checkbox" class="book-checkbox" ${isSelected ? 'checked' : ''} aria-label="Select ${book.Title}">
+                    <div class="book-details">
+                        <h3>${book.Title}</h3>
+                        <p>Publisher: ${book.Publisher} | Subject: ${book.Subject}</p>
+                    </div>
+                    <div class="book-price">₹${parseFloat(book.Price || 0).toFixed(2)}</div>
+                `;
+                item.addEventListener('click', (e) => {
+                     const checkbox = item.querySelector('.book-checkbox');
+                     if(e.target.type !== 'checkbox') {
+                        checkbox.checked = !checkbox.checked;
+                     }
+                     item.classList.toggle('selected', checkbox.checked);
+                });
+                bookList.appendChild(item);
+            });
+        }
+
+        // --- CART LOGIC ---
+        function handleAddToBag() {
+            cart = [];
+            const selectedCheckboxes = document.querySelectorAll('.book-checkbox:checked');
+            selectedCheckboxes.forEach(checkbox => {
+                const title = checkbox.closest('.book-item').dataset.title;
+                const bookData = allBooks.find(b => b.Title === title);
+                if (bookData) {
+                    cart.push(bookData);
+                }
+            });
+
+            if (cart.length > 0) {
+                renderCartView();
+                openCart();
+            } else {
+                alert('Please select at least one book to add to your bag.');
+            }
+        }
+
+        function openCart() {
+            cartPanel.classList.add('open');
+            cartOverlay.classList.add('visible');
+        }
+
+        function closeCart() {
+            cartPanel.classList.remove('open');
+            cartOverlay.classList.remove('visible');
+        }
+        
+        // --- CHECKOUT FLOW ---
+        function renderCartView() {
+            const total = cart.reduce((sum, item) => sum + parseFloat(item.Price || 0), 0);
+            let cartHTML = `<h2>Your School Bag</h2>`;
+            cart.forEach(item => {
+                cartHTML += `
+                    <div class="cart-item">
+                        <span>${item.Title}</span>
+                        <strong>₹${parseFloat(item.Price || 0).toFixed(2)}</strong>
+                    </div>`;
+            });
+            cartHTML += `
+                <div class="cart-total">
+                    <span>Total</span>
+                    <strong>₹${total.toFixed(2)}</strong>
+                </div>
+                <div class="cart-buttons">
+                    <button id="proceed-btn" class="btn">Proceed</button>
+                </div>`;
+            cartContent.innerHTML = cartHTML;
+            document.getElementById('proceed-btn').addEventListener('click', renderFormView);
+        }
+        
+        function renderFormView() {
+            cartContent.innerHTML = `
+                <h2>Delivery Address</h2>
+                <form id="checkout-form" class="checkout-form">
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" required>
+                    </div>
+                    <div class="form-row">
+                        <div>
+                            <label for="firstName">First Name</label>
+                            <input type="text" id="firstName" required>
+                        </div>
+                        <div>
+                            <label for="lastName">Last Name</label>
+                            <input type="text" id="lastName" required>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="address">Address (House No, Street)</label>
+                        <input type="text" id="address" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="landmark">Landmark (Optional)</label>
+                        <input type="text" id="landmark">
+                    </div>
+                    <div class="form-row">
+                        <div>
+                            <label for="city">City</label>
+                            <input type="text" id="city" required>
+                        </div>
+                        <div>
+                            <label for="state">State</label>
+                            <input type="text" id="state" required>
+                        </div>
+                    </div>
+                     <div class="form-group">
+                        <label for="pincode">PIN Code</label>
+                        <input type="text" id="pincode" required pattern="[0-9]{6}" title="6-digit PIN code">
+                    </div>
+                    <div class="form-group">
+                        <label for="phone">Phone Number</label>
+                        <input type="tel" id="phone" required>
+                    </div>
+                    <div class="cart-buttons">
+                        <button type="submit" class="btn">Confirm Details</button>
+                    </div>
+                </form>
+            `;
+            document.getElementById('checkout-form').addEventListener('submit', handleFormSubmit);
+        }
+
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            const customerDetails = {
+                email: document.getElementById('email').value,
+                firstName: document.getElementById('firstName').value,
+                lastName: document.getElementById('lastName').value,
+                phone: document.getElementById('phone').value,
+                address: {
+                    street: document.getElementById('address').value,
+                    landmark: document.getElementById('landmark').value,
+                    city: document.getElementById('city').value,
+                    state: document.getElementById('state').value,
+                    pincode: document.getElementById('pincode').value
+                }
+            };
+            renderOrderPreview(customerDetails);
+        }
+
+        function renderOrderPreview(customerDetails) {
+            const total = cart.reduce((sum, item) => sum + parseFloat(item.Price || 0), 0);
+            let previewHTML = `
+                <h2>Order Preview</h2>
+                <div class="order-preview">
+                    <h3>Selected Books</h3>
+                    ${cart.map(item => `
+                        <div class="order-summary-item">
+                            <span>${item.Title}</span>
+                            <strong>₹${parseFloat(item.Price || 0).toFixed(2)}</strong>
+                        </div>`).join('')}
+                    <div class="order-total">
+                        <span>Total</span>
+                        <strong>₹${total.toFixed(2)}</strong>
+                    </div>
+                    <h3>Delivery To</h3>
+                    <div class="order-preview-address">
+                        <p><strong>${customerDetails.firstName} ${customerDetails.lastName}</strong></p>
+                        <p>${customerDetails.address.street}</p>
+                        ${customerDetails.address.landmark ? `<p>${customerDetails.address.landmark}</p>` : ''}
+                        <p>${customerDetails.address.city}, ${customerDetails.address.state} - ${customerDetails.address.pincode}</p>
+                        <p>Email: ${customerDetails.email}</p>
+                        <p>Phone: ${customerDetails.phone}</p>
+                    </div>
+                </div>
+                <div class="cart-buttons">
+                     <button id="payment-btn" class="btn">Make Payment</button>
+                </div>`;
+            cartContent.innerHTML = previewHTML;
+            document.getElementById('payment-btn').addEventListener('click', () => renderPaymentView(customerDetails, total));
+        }
+        
+        function renderPaymentView(customerDetails, total) {
+            const amount = total.toFixed(2);
+            const upiLink = `upi://pay?pa=yatinmurkar6-2@okicici&pn=Y A T I N&aid=uGICAgID1zY2ybw&cu=INR&am=${amount}`;
+            cartContent.innerHTML = `
+                <h2>Scan to Pay</h2>
+                <p style="text-align:center;">Scan the QR code below with any UPI app to pay <strong>₹${amount}</strong>.</p>
+                <div id="qr-code-container"></div>
+                <p style="text-align:center; margin-top: 15px;">After payment is complete, click the button below.</p>
+                <div class="cart-buttons">
+                    <button id="confirm-payment-btn" class="btn">I Have Paid</button>
+                </div>`;
+            new QRCode(document.getElementById("qr-code-container"), { text: upiLink, width: 200, height: 200 });
+            document.getElementById('confirm-payment-btn').addEventListener('click', () => finalizeOrder(customerDetails, total));
+        }
+
+        async function finalizeOrder(customerDetails, total) {
+            const orderId = `BW-${Date.now()}`;
+            const payload = {
+                orderId: orderId,
+                customerFirstName: customerDetails.firstName,
+                customerLastName: customerDetails.lastName,
+                customerEmail: customerDetails.email,
+                customerPhone: customerDetails.phone,
+                deliveryStreet: customerDetails.address.street,
+                deliveryLandmark: customerDetails.address.landmark,
+                deliveryCity: customerDetails.address.city,
+                deliveryState: customerDetails.address.state,
+                deliveryPincode: customerDetails.address.pincode,
+                totalAmount: total.toFixed(2),
+                items: cart,
+                purchaseDate: new Date().toISOString()
+            };
+            cartContent.innerHTML = `<div class="loader" style="margin: 80px auto;"></div><h2 style="text-align:center;">Processing your order...</h2>`;
+            try {
+                await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify(payload)
+                });
+                renderSuccessView(orderId);
+            } catch (error) {
+                console.error('Failed to submit order to webhook:', error);
+                renderSuccessView(orderId);
+            }
+        }
+        
+        function renderSuccessView(orderId) {
+            cartContent.innerHTML = `
+                <div class="success-message">
+                    <div class="icon">&#10004;</div>
+                    <h2>Thank You For Your Purchase!</h2>
+                    <p>Your order has been placed successfully.</p>
+                    <p>Your Order ID is:</p>
+                    <div id="order-id">${orderId}</div>
+                </div>`;
+            cart = [];
+            allBooks = [];
+            schoolSelect.value = '';
+            standardSelect.value = '';
+            bookSection.style.display = 'none';
+            submitSelectionBtn.disabled = true;
+        }
+
+    });
+    </script>
+</body>
+</html>
+
