@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Book World</title>
-    <!-- QR Code Library -->
-    <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js"></script>
+    <!-- Razorpay Checkout Script -->
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <style>
         :root {
             --primary-color: #007bff;
@@ -196,6 +196,7 @@
         .order-preview h3 { border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; margin-bottom: 15px; }
         .order-preview-address p { margin: 0; line-height: 1.5; }
         .cod-option { margin-top: 20px; text-align: left; }
+        #pincode-status { font-size: 0.8rem; margin-top: 4px; height: 1em; }
 
         /* Payment Section */
         #qr-code-container { display: flex; justify-content: center; align-items: center; padding: 20px; margin: 20px auto; border: 1px dashed var(--border-color); width: fit-content; border-radius: 8px; }
@@ -365,11 +366,14 @@
             submitSelectionBtn.disabled = true;
 
             try {
-                // REMOVED FALLBACK. This will only use the live webhook.
                 const response = await fetch(WEBHOOK_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ school, standard })
+                    body: JSON.stringify({ 
+                        requestType: 'getBooks',
+                        school, 
+                        standard 
+                    })
                 });
                 if (!response.ok) throw new Error(`Network response error. Status: ${response.status}`);
                 const responseData = await response.json();
@@ -485,8 +489,64 @@
         }
         
         function renderFormView() {
-            cartContent.innerHTML = `<h2>Delivery Address</h2> <form id="checkout-form" class="checkout-form"> <div class="form-group"> <label for="email">Email</label> <input type="email" id="email" required> </div><div class="form-row"> <div> <label for="firstName">First Name</label> <input type="text" id="firstName" required> </div><div> <label for="lastName">Last Name</label> <input type="text" id="lastName" required> </div></div><div class="form-group"> <label for="address">Address (House No, Street)</label> <input type="text" id="address" required> </div><div class="form-group"> <label for="landmark">Landmark (Optional)</label> <input type="text" id="landmark"> </div><div class="form-row"> <div> <label for="city">City</label> <input type="text" id="city" required> </div><div> <label for="state">State</label> <input type="text" id="state" required> </div></div><div class="form-group"> <label for="pincode">PIN Code</label> <input type="text" id="pincode" required pattern="[0-9]{6}" title="6-digit PIN code"> </div><div class="form-group"> <label for="phone">Phone Number</label> <input type="tel" id="phone" required> </div><div class="cart-buttons"> <button type="submit" class="btn">Confirm Details</button> </div></form>`;
+            cartContent.innerHTML = `<h2>Delivery Address</h2>
+                <form id="checkout-form" class="checkout-form">
+                    <div class="form-row">
+                        <div><label for="firstName">First Name</label><input type="text" id="firstName" required></div>
+                        <div><label for="lastName">Last Name</label><input type="text" id="lastName" required></div>
+                    </div>
+                    <div class="form-group"><label for="email">Email</label><input type="email" id="email" required></div>
+                    <div class="form-group">
+                        <label for="pincode">PIN Code</label>
+                        <input type="text" id="pincode" required pattern="[0-9]{6}" title="6-digit PIN code">
+                        <div id="pincode-status" style="color:var(--secondary-color)"></div>
+                    </div>
+                    <div class="form-row">
+                        <div><label for="city">City</label><input type="text" id="city" required></div>
+                        <div><label for="state">State</label><input type="text" id="state" required></div>
+                    </div>
+                    <div class="form-group"><label for="address">Address (House No, Street)</label><input type="text" id="address" required></div>
+                    <div class="form-group"><label for="landmark">Landmark (Optional)</label><input type="text" id="landmark"></div>
+                    <div class="form-group"><label for="phone">Phone Number</label><input type="tel" id="phone" required></div>
+                    <div class="cart-buttons"><button type="submit" class="btn">Confirm Details</button></div>
+                </form>`;
+            document.getElementById('pincode').addEventListener('input', handlePincodeInput);
             document.getElementById('checkout-form').addEventListener('submit', handleFormSubmit);
+        }
+
+        async function handlePincodeInput(e) {
+            const pincode = e.target.value;
+            const cityInput = document.getElementById('city');
+            const stateInput = document.getElementById('state');
+            const statusEl = document.getElementById('pincode-status');
+
+            if (pincode.length !== 6) {
+                cityInput.value = '';
+                stateInput.value = '';
+                statusEl.textContent = '';
+                return;
+            }
+
+            statusEl.textContent = 'Fetching details...';
+            try {
+                const response = await fetch(`https://api.postalpincode.in/pincode/${pincode}`);
+                const data = await response.json();
+                if (data && data[0].Status === 'Success') {
+                    const postOffice = data[0].PostOffice[0];
+                    cityInput.value = postOffice.District;
+                    stateInput.value = postOffice.State;
+                    statusEl.textContent = '';
+                } else {
+                    cityInput.value = '';
+                    stateInput.value = '';
+                    statusEl.textContent = 'Invalid PIN code.';
+                    statusEl.style.color = 'var(--danger-color)';
+                }
+            } catch (error) {
+                console.error('Pincode fetch error:', error);
+                statusEl.textContent = 'Could not fetch details.';
+                statusEl.style.color = 'var(--danger-color)';
+            }
         }
 
         function handleFormSubmit(e) {
@@ -520,41 +580,114 @@
             });
             
             document.getElementById('payment-btn').addEventListener('click', () => {
+                const orderId = `BW-${Date.now()}`; // Generate ID here to be consistent
                 if (isCod) {
-                    finalizeOrder(customerDetails, finalTotal, true);
+                    finalizeOrder(customerDetails, finalTotal, true, null, orderId);
                 } else {
-                    renderPaymentView(customerDetails, finalTotal, false);
+                    renderPaymentView(customerDetails, finalTotal, orderId);
                 }
             });
         }
         
-        function renderPaymentView(customerDetails, total, isCod) {
-            const upiLink = `upi://pay?pa=yatinmurkar6-2%40okicici&pn=YATIN&tn=Payment+for+Book+Order&cu=INR&am=${total.toFixed(2)}`;
-            cartContent.innerHTML = `<h2>Scan to Pay</h2>
-                <p style="text-align:center;">SCAN QR Code to pay or click on PAY Now button.</p>
-                <div id="qr-code-container"></div>
-                <p style="text-align:center;">Total Amount: <strong>₹${total.toFixed(2)}</strong></p>
-                <div class="cart-buttons payment-buttons">
-                    <a href="${upiLink}" class="btn">Pay Now</a>
-                </div>
-                <p style="text-align:center; margin-top: 15px;">After payment is complete, click the button below.</p>
-                <div class="cart-buttons">
-                    <button id="confirm-payment-btn" class="btn">I Have Paid</button>
-                </div>`;
-            new QRCode(document.getElementById("qr-code-container"), { text: upiLink, width: 200, height: 200 });
-            document.getElementById('confirm-payment-btn').addEventListener('click', () => finalizeOrder(customerDetails, total, isCod));
+        // --- RAZORPAY INTEGRATION ---
+        async function renderPaymentView(customerDetails, total, orderId) {
+            cartContent.innerHTML = `<div class="loader"></div><h2 style="text-align:center;">Initializing Payment...</h2>`;
+
+            try {
+                // Step 1: Call your n8n backend to create a Razorpay Order
+                const orderResponse = await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        requestType: 'createOrder',
+                        amount: total,
+                        receiptId: orderId
+                    })
+                });
+                
+                if (!orderResponse.ok) {
+                    throw new Error('Failed to create Razorpay order from n8n.');
+                }
+
+                const orderData = await orderResponse.json();
+                const razorpayOrderId = orderData.id;
+
+                // Step 2: Configure Razorpay Checkout
+                const options = {
+                    "key": "rzp_test_RVIOGK5UOLUz3a",
+                    "amount": total * 100,
+                    "currency": "INR",
+                    "name": "Book World",
+                    "description": "Payment for Book Order",
+                    "order_id": razorpayOrderId,
+                    "handler": function (response){
+                        console.log("Payment Successful:", response);
+                        finalizeOrder(customerDetails, total, false, response, orderId);
+                    },
+                    "prefill": {
+                        "name": `${customerDetails.firstName} ${customerDetails.lastName}`,
+                        "email": customerDetails.email,
+                        "contact": customerDetails.phone
+                    },
+                    "theme": {
+                        "color": "#007bff"
+                    }
+                };
+
+                const rzp1 = new Razorpay(options);
+                rzp1.on('payment.failed', function (response){
+                    alert("Payment Failed: " + response.error.description);
+                    console.error("Razorpay Error:", response.error);
+                    renderOrderPreview(customerDetails, false);
+                });
+
+                // Step 3: Open the Razorpay payment screen
+                rzp1.open();
+                
+            } catch (error) {
+                console.error("Payment initialization failed:", error);
+                cartContent.innerHTML = `<p style="color:var(--danger-color); text-align:center;">Could not connect to the payment gateway. Please try again later.</p>`;
+            }
         }
 
-        async function finalizeOrder(customerDetails, total, isCod) {
-            const orderId = `BW-${Date.now()}`;
-            const payload = { orderId, customerFirstName: customerDetails.firstName, customerLastName: customerDetails.lastName, customerEmail: customerDetails.email, customerPhone: customerDetails.phone, deliveryStreet: customerDetails.address.street, deliveryLandmark: customerDetails.address.landmark, deliveryCity: customerDetails.address.city, deliveryState: customerDetails.address.state, deliveryPincode: customerDetails.address.pincode, totalAmount: total.toFixed(2), paymentMethod: isCod ? 'COD' : 'Prepaid', items: cart, purchaseDate: new Date().toISOString() };
+        async function finalizeOrder(customerDetails, total, isCod, razorpayResponse = null, orderId) {
+            const payload = { 
+                requestType: 'logOrder',
+                orderId, 
+                customerFirstName: customerDetails.firstName, 
+                customerLastName: customerDetails.lastName, 
+                customerEmail: customerDetails.email, 
+                customerPhone: customerDetails.phone, 
+                deliveryStreet: customerDetails.address.street, 
+                deliveryLandmark: customerDetails.address.landmark, 
+                deliveryCity: customerDetails.address.city, 
+                deliveryState: customerDetails.address.state, 
+                deliveryPincode: customerDetails.address.pincode, 
+                totalAmount: total.toFixed(2), 
+                paymentMethod: isCod ? 'COD' : 'Razorpay',
+                isCOD: isCod ? 'Yes' : 'No',
+                codCharge: isCod ? COD_CHARGE.toFixed(2) : '0.00',
+                razorpayDetails: razorpayResponse, 
+                items: cart, 
+                purchaseDate: new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) 
+            };
             cartContent.innerHTML = `<div class="loader"></div><h2 style="text-align:center;">Processing...</h2>`;
             try {
-                await fetch(WEBHOOK_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+                // THIS IS THE CORRECTED PART. It sends a standard, trackable request.
+                const response = await fetch(WEBHOOK_URL, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload) 
+                });
+                if (!response.ok) {
+                    // This log helps debug if the server rejects the request.
+                    console.error('Failed to log final order to webhook. Server responded with:', response.status);
+                }
                 renderSuccessView(orderId);
             } catch (error) {
-                console.error('Failed to submit order:', error);
-                renderSuccessView(orderId);
+                // This will now catch the CORS error if the server is not configured correctly.
+                console.error('Failed to submit final order log due to a network or CORS error:', error);
+                renderSuccessView(orderId); // Show success to the user regardless.
             }
         }
         
